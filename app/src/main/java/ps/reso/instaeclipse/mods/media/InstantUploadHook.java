@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.ImageDecoder;
+import android.media.MediaMetadataRetriever;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -251,7 +252,8 @@ public class InstantUploadHook {
     private static void launchPicker(Activity act) {
         try {
             Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-            i.setType("image/*");
+            i.setType("*/*");
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
             i.addCategory(Intent.CATEGORY_OPENABLE);
             act.startActivityForResult(Intent.createChooser(i,
                     I18n.t(act, R.string.ig_instant_upload_chip)), PICK_REQUEST);
@@ -274,6 +276,26 @@ public class InstantUploadHook {
                                 Uri uri = ((Intent) p.args[2]).getData();
                                 if (uri == null) return;
                                 Activity act = (Activity) p.thisObject;
+                                String mime = act.getContentResolver().getType(uri);
+                                if (mime != null && mime.startsWith("video/")) {
+                                    // Video Instants need a different pipeline than Bitmap photos.
+                                    // Do not silently publish a still frame as a video.
+                                    pendingBitmap = null;
+                                    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                                    try {
+                                        retriever.setDataSource(act, uri);
+                                        String duration = retriever.extractMetadata(
+                                                MediaMetadataRetriever.METADATA_KEY_DURATION);
+                                        ModuleLog.line("(IE|InstantUpload) video selected; durationMs="
+                                                + duration + "; video send pipeline not yet mapped");
+                                    } finally {
+                                        try { retriever.release(); } catch (Throwable ignored) {}
+                                    }
+                                    Toast.makeText(act,
+                                            "Vídeo selecionado. Envio de vídeo nos Instants ainda indisponível.",
+                                            Toast.LENGTH_LONG).show();
+                                    return;
+                                }
                                 Bitmap bmp = decode(act, uri);
                                 if (bmp == null) {
                                     Toast.makeText(act, I18n.t(act, R.string.ig_instant_upload_fail),
