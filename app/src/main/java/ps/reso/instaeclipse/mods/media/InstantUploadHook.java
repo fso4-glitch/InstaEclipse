@@ -61,6 +61,33 @@ public class InstantUploadHook {
         hookSwap(cl);
         hookCameraOpen(cl);
         hookPickerResult();
+        logQuicksnapVideoCandidates(cl);
+    }
+
+    /**
+     * Diagnostic-only: discover candidate recording methods in the Instagram build
+     * without altering the video pipeline or intercepting private message content.
+     * A real gallery-video upload needs the native recording payload contract.
+     */
+    private void logQuicksnapVideoCandidates(ClassLoader cl) {
+        try {
+            Class<?> vm = XposedHelpers.findClass(VM_CLASS, cl);
+            int count = 0;
+            for (Method m : vm.getDeclaredMethods()) {
+                String signature = m.toGenericString();
+                String lower = signature.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("video") || lower.contains("record")
+                        || lower.contains("media") || lower.contains("uri")
+                        || lower.contains("file") || lower.contains("camera")) {
+                    if (count++ >= 60) break;
+                    ModuleLog.line("(IE|InstantVideoDiag) candidate " + signature);
+                }
+            }
+            ModuleLog.line("(IE|InstantVideoDiag) candidate signatures logged=" + count
+                    + "; IG version 451.0.0.20.80 requires runtime mapping");
+        } catch (Throwable t) {
+            ModuleLog.line("(IE|InstantVideoDiag) discovery failed: " + t);
+        }
     }
 
     // ── 4. The bitmap swap (verified: A02 arg1 = captured Bitmap) ──────────────
